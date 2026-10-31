@@ -1,0 +1,53 @@
+VIDEOFIX — PHỤC HỒI CAPCUT VÀ QUÉT MP4 TRÙNG NỘI DUNG
+Phiên bản 1.1.0 · Windows 64 bit · Không cần cài đặt
+
+CÁCH DÙNG
+1. Mở VideoFix_CapCut_v1_1.exe.
+2. Kéo thả một hoặc nhiều video / cả thư mục vào cửa sổ.
+   Bạn cũng có thể kéo trực tiếp lên biểu tượng EXE, hoặc dùng Chọn video / Chọn thư mục.
+3. Bấm Bắt đầu phục hồi.
+4. Bấm Mở thư mục kết quả khi hoàn tất.
+
+QUÉT VIDEO MP4 TRÙNG DÙ KHÁC TÊN
+1. Chọn hoặc kéo thả các video / thư mục cần so sánh như trên.
+2. Bấm Quét trùng MP4.
+3. Xem các nhóm trong bảng kết quả: mỗi nhóm có một bản Giữ lại, các bản trùng được đánh dấu ☑ Xóa.
+4. Muốn giữ bản khác: chọn file đó rồi bấm Chọn làm bản giữ.
+   Muốn giữ thêm một bản trùng: nhấp đúp (hoặc phím cách) để đổi ☑ Xóa thành ☐ Giữ.
+5. Bấm Xóa … bản trùng, xác nhận. Các bản ☑ Xóa được chuyển vào Thùng rác (khôi phục được).
+6. Dùng Mở vị trí file để xem trong Explorer hoặc Lưu danh sách để xuất TXT/JSON.
+- Quét không xóa gì; chỉ khi bấm Xóa và xác nhận mới chuyển file vào Thùng rác.
+- Mỗi nhóm luôn còn bản Giữ lại. File bị sửa/đổi dung lượng sau khi quét sẽ được bỏ qua, không xóa.
+- Ổ mạng không có Thùng rác: Windows sẽ hỏi trước khi xóa hẳn.
+- So sánh dữ liệu chính xác; nhận ra bản tải đổi tên hoặc lớp BDVE khác nhau khi được hỗ trợ.
+- Video chỉ giống hình ảnh nhưng đã nén lại khác dữ liệu sẽ không được coi là trùng chính xác.
+- Mặc định không quét lại thư mục kết quả _PHUC_HOI_CAPCUT, _FIXED, H264_compatible.
+- Nếu có cả bản BDVE và bản MP4 chuẩn của cùng video, gợi ý ưu tiên giữ bản MP4 chuẩn.
+
+NẾU MỘT FILE BÁO LỖI
+Chọn dòng rồi bấm Chi tiết hoặc nhấp đúp để xem lý do cụ thể.
+Bản 1.1 đã mở rộng nhận dạng cho hai file keole 1.mp4 và nam dau 2.mp4.
+
+KẾT QUẢ LƯU Ở ĐÂU?
+- Thả một thư mục: kết quả ở _PHUC_HOI_CAPCUT bên trong thư mục đó.
+- Thả các file: kết quả ở _PHUC_HOI_CAPCUT cạnh các file gốc.
+- Giữ cấu trúc thư mục con. Tên bản sửa kết thúc bằng _FIXED.mp4.
+- File đã chuẩn được bỏ qua. Bản sửa đã tồn tại cũng được giữ nguyên.
+- Có nhật ký ket_qua_*.json để xem các file lỗi hoặc chưa hỗ trợ.
+
+CÔNG CỤ LÀM GÌ?
+- Phục hồi lớp dữ liệu BDVE Type 1 trong video CapCut, gồm dạng đã kiểm tra trên bộ Cảnh 2.
+- Không nén lại hình hoặc tiếng; giữ độ phân giải, FPS và codec gốc.
+- Không ghi đè video gốc. Có nút Dừng; file đang làm dở không xuất thành MP4 hoàn tất.
+- Chạy cục bộ, không tải video lên mạng, không cần Python hoặc codec riêng cho bước phục hồi.
+- Nếu có FFmpeg/CapCut trên máy, tự dùng công cụ giải mã sẵn có để kiểm tra toàn bộ hình và tiếng.
+  Nếu không tìm thấy, giao diện sẽ thông báo chỉ kiểm tra cấu trúc MP4.
+
+GIỚI HẠN
+- Bản HEVC sau phục hồi vẫn cần trình phát hỗ trợ HEVC, ví dụ MPC-HC bản cập nhật.
+- Không sửa được mọi loại video hỏng. Dữ liệu tải thiếu hoặc dạng CapCut mới chưa hỗ trợ sẽ báo lỗi/bỏ qua.
+- Nên đợi tải xong video rồi mới phục hồi; không chọn file đang được CapCut ghi.
+
+MÃ NGUỒN & GIẤY PHÉP
+Mã nguồn đi kèm trong thư mục source. Phần phân tích BDVE kế thừa dự án MIT
+CapCut Cache Recover; thông tin tại THIRD_PARTY_LICENSES.txt.

@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+build/
+dist/
+fixtures/
+tests/scratch/
+*.exe
+*.zip
+*.mp4
