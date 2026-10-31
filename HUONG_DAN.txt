@@ -38,6 +38,9 @@ KẾT QUẢ LƯU Ở ĐÂU?
 CÔNG CỤ LÀM GÌ?
 - Phục hồi lớp dữ liệu BDVE Type 1 trong video CapCut, gồm dạng đã kiểm tra trên bộ Cảnh 2.
 - Không nén lại hình hoặc tiếng; giữ độ phân giải, FPS và codec gốc.
+- Ô "Tạo thêm bản H264" mặc định TẮT: khi tắt, chỉ xuất bản _FIXED.mp4, không tạo file nào khác.
+  Khi tick, video HEVC đã phục hồi có thêm bản nén lại H264 trong thư mục H264_compatible
+  (dùng FFmpeg của CapCut, ưu tiên card đồ họa). Video vốn là H264 thì không tạo thêm.
 - Không ghi đè video gốc. Có nút Dừng; file đang làm dở không xuất thành MP4 hoàn tất.
 - Chạy cục bộ, không tải video lên mạng, không cần Python hoặc codec riêng cho bước phục hồi.
 - Nếu có FFmpeg/CapCut trên máy, tự dùng công cụ giải mã sẵn có để kiểm tra toàn bộ hình và tiếng.

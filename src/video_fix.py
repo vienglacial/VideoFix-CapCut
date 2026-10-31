@@ -14,6 +14,7 @@ from batch_jobs import collect_jobs, OUTPUT_NAME
 from bdve_engine import repair_file, CancelledError
 from playback_check import find_ffmpeg, verify_playback
 from duplicates import scan_duplicates
+from h264_export import make_h264_copy
 
 VERSION = '1.1.0'
 
@@ -34,9 +35,10 @@ def save_reports(records, roots, issues):
     return result
 
 
-def run_jobs(jobs, cancel, emit, check=True):
+def run_jobs(jobs, cancel, emit, check=True, h264=False):
     records, roots = [], []
-    executable = find_ffmpeg() if check else None
+    ffmpeg = find_ffmpeg() if check or h264 else None
+    executable = ffmpeg if check else None
     emit('verification', bool(executable))
     for index, job in enumerate(jobs):
         if cancel.is_set():
@@ -65,6 +67,23 @@ def run_jobs(jobs, cancel, emit, check=True):
                     record['full_decode_checked'] = bool(executable)
                     if job.output_root not in roots:
                         roots.append(job.output_root)
+                    if h264:
+                        codec = info.get('video_info', {}).get('video_codec')
+                        if codec == 'h264':
+                            record['h264'] = {'status': 'skipped_already_h264'}
+                        elif not ffmpeg:
+                            record['h264'] = {'status': 'error', 'reason': 'Không tìm thấy FFmpeg/CapCut trên máy.'}
+                        else:
+                            emit('converting', index)
+                            try:
+                                record['h264'] = make_h264_copy(job.destination, ffmpeg, cancel)
+                            except CancelledError:
+                                record['h264'] = {'status': 'cancelled'}
+                                records.append(record)
+                                emit('result', (index, record))
+                                break
+                            except Exception as error:
+                                record['h264'] = {'status': 'error', 'reason': str(error)}
         except CancelledError:
             record.update(status='cancelled', reason='Đã dừng theo yêu cầu.')
             records.append(record)
@@ -105,7 +124,7 @@ def headless(args):
             print(json.dumps({'report': str(report_path), 'groups': len(result['groups']),
                               'duplicate_files': result['duplicate_files'], 'errors': len(result['errors'])}))
         return 1 if result['errors'] or issues else 0
-    records, roots = run_jobs(jobs, stop, lambda *event: None, not args.no_verify)
+    records, roots = run_jobs(jobs, stop, lambda *event: None, not args.no_verify, getattr(args, 'h264', False))
     if args.output_dir:
         roots = [Path(args.output_dir).resolve()]
     elif not roots and jobs:
@@ -114,6 +133,7 @@ def headless(args):
     summary = {'files': len(jobs), 'repaired': sum(r['status'] == 'repaired' for r in records),
                'errors': sum(r['status'] in {'error', 'unsupported'} for r in records),
                'skipped': sum(r['status'].startswith('skipped') for r in records),
+               'h264_created': sum(r.get('h264', {}).get('status') == 'created' for r in records),
                'reports': [str(p) for p in reports], 'issues': issues}
     if sys.stdout:
         print(json.dumps(summary, ensure_ascii=True))
@@ -141,6 +161,7 @@ def gui(args):
             self.busy, self.close_pending = False, False
             self.recursive = tk.BooleanVar(value=not args.no_recursive)
             self.check = tk.BooleanVar(value=not args.no_verify)
+            self.h264 = tk.BooleanVar(value=getattr(args, 'h264', False))
             self.message = tk.StringVar(value='Chọn video hoặc kéo thả để phục hồi / quét trùng MP4.')
             self.count = tk.StringVar(value='Chưa chọn video')
             self.status = tk.StringVar(value='Chạy trên máy của bạn · Giữ nguyên chất lượng và codec gốc')
@@ -180,6 +201,8 @@ def gui(args):
             self.recurse_box.pack(side='left')
             self.check_box = ttk.Checkbutton(options, text='Kiểm tra phát hình và tiếng', variable=self.check)
             self.check_box.pack(side='left', padx=18)
+            self.h264_box = ttk.Checkbutton(options, text='Tạo thêm bản H264 (dễ phát hơn, nén lại)', variable=self.h264)
+            self.h264_box.pack(side='left')
             self.clear_button = ttk.Button(options, text='Xóa danh sách', command=self.clear)
             self.clear_button.pack(side='right')
             table_frame = ttk.Frame(body)
@@ -243,7 +266,7 @@ def gui(args):
             self.busy = value
             state = 'disabled' if value else 'normal'
             for widget in (self.files_button, self.folder_button, self.clear_button,
-                           self.recurse_box, self.check_box):
+                           self.recurse_box, self.check_box, self.h264_box):
                 widget.configure(state=state)
             self.start_button.configure(state='normal' if self.jobs and not value else 'disabled')
             self.duplicates_button.configure(state='normal' if self.jobs and not value else 'disabled')
@@ -289,11 +312,11 @@ def gui(args):
             self.progress['value'] = 0
             for index in range(len(self.jobs)):
                 self.table.item(str(index), values=(self.jobs[index].source.name, 'Chờ xử lý'), tags=())
-            check = self.check.get()
+            check, h264 = self.check.get(), self.h264.get()
             def worker():
                 try:
                     records, roots = run_jobs(self.jobs, self.stop,
-                        lambda kind, payload: self.events.put((kind, payload)), check)
+                        lambda kind, payload: self.events.put((kind, payload)), check, h264)
                     issues = []
                     if not roots and self.jobs:
                         roots = [self.jobs[0].output_root]
@@ -344,6 +367,13 @@ def gui(args):
                 lines.extend(['', f'Video: {info.get("video_codec", "")} · {info.get("width", "")}×{info.get("height", "")}',
                               f'Thời lượng: {info.get("duration_seconds", "")} giây'])
             lines.extend(['', f'Bản sửa: {job.destination}'])
+            h264 = record.get('h264')
+            if h264:
+                names = {'created': 'Đã tạo', 'skipped_existing': 'Đã có sẵn', 'skipped_already_h264': 'Video gốc đã là H264',
+                         'cancelled': 'Đã dừng', 'error': 'Lỗi'}
+                lines.append(f'Bản H264: {names.get(h264["status"], h264["status"])}'
+                             + (f' · {h264["path"]}' if h264.get('path') else '')
+                             + ('\n' + h264['reason'] if h264.get('reason') else ''))
             messagebox.showinfo('Chi tiết video', '\n'.join(lines), parent=self.root)
 
         def cancel(self):
@@ -386,6 +416,8 @@ def gui(args):
                         self.table.item(str(payload), values=(self.jobs[payload].source.name, 'Đang phục hồi…'))
                         self.table.see(str(payload))
                         self.message.set(f'Đang xử lý {payload + 1}/{len(self.jobs)}: {self.jobs[payload].source.name}')
+                    elif kind == 'converting':
+                        self.table.item(str(payload), values=(self.jobs[payload].source.name, 'Đang tạo bản H264…'))
                     elif kind == 'checking':
                         self.table.item(str(payload), values=(self.jobs[payload].source.name, 'Đang kiểm tra phát…'))
                     elif kind == 'progress':
@@ -404,7 +436,13 @@ def gui(args):
                                  'skipped_existing': 'Đã có bản sửa · bỏ qua', 'unsupported': 'Chưa hỗ trợ',
                                  'cancelled': 'Đã dừng', 'error': 'Không phục hồi được'}
                         tag = 'ok' if state == 'repaired' else ('error' if state in {'error', 'unsupported'} else 'skip')
-                        self.table.item(str(index), values=(self.jobs[index].source.name, names.get(state, state)), tags=(tag,))
+                        label = names.get(state, state)
+                        h264_state = record.get('h264', {}).get('status')
+                        if h264_state in {'created', 'skipped_existing'}:
+                            label += ' · có bản H264'
+                        elif h264_state in {'error', 'cancelled'}:
+                            label += ' · H264 lỗi' if h264_state == 'error' else ' · H264 đã dừng'
+                        self.table.item(str(index), values=(self.jobs[index].source.name, label), tags=(tag,))
                     elif kind == 'duplicate_progress':
                         self.progress['value'] = 100 * min(1.0, max(0.0, payload))
                     elif kind == 'duplicate_log':
@@ -428,7 +466,9 @@ def gui(args):
                         errors = sum(r['status'] in {'error', 'unsupported'} for r in records)
                         skipped = sum(r['status'].startswith('skipped') for r in records)
                         prefix = 'Đã dừng' if self.stop.is_set() else 'Hoàn tất'
-                        self.message.set(f'{prefix}: {repaired} phục hồi · {skipped} bỏ qua · {errors} lỗi/chưa hỗ trợ.')
+                        h264_made = sum(r.get('h264', {}).get('status') == 'created' for r in records)
+                        self.message.set(f'{prefix}: {repaired} phục hồi · {skipped} bỏ qua · {errors} lỗi/chưa hỗ trợ'
+                                         + (f' · {h264_made} bản H264.' if h264_made else '.'))
                         self.open_button.configure(state='normal' if roots else 'disabled')
                         if not self.stop.is_set():
                             self.progress['value'] = 100
@@ -458,6 +498,7 @@ def main():
     parser.add_argument('--output-dir', help='Thư mục kết quả cho chế độ dòng lệnh')
     parser.add_argument('--no-recursive', action='store_true')
     parser.add_argument('--no-verify', action='store_true')
+    parser.add_argument('--h264', action='store_true', help='Tạo thêm bản H264 cho video đã phục hồi (mặc định tắt)')
     parser.add_argument('--duplicates', action='store_true', help='Quét MP4 trùng nội dung trong chế độ dòng lệnh')
     args = parser.parse_args()
     return headless(args) if args.headless else gui(args)
