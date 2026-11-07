@@ -31,12 +31,16 @@ class UnsupportedFormat(RepairError):
 
 
 MAX_DISCOVERY_STEP = 5_000_000
-MAX_DISCOVERY_HASHES = 12_000_000
+# Short clips provide fewer boundary constraints and can leave tens of millions
+# of valid parameter candidates. Keep work bounded without rejecting these clips
+# before the exact trailer hash can be reached. Cancellation is checked below.
+MAX_DISCOVERY_HASHES = 64_000_000
 MAX_MOOV_SIZE = 64 * 1024 * 1024
 CHUNK_SIZE = 4 * 1024 * 1024
 KNOWN_PROFILES = (
     (600_056, 533_594), (463_682, 214_523),
     (766_265, 114_840), (331_491, 174_662),
+    (530_355, 387_090),
     *reference.BDVE_KNOWN_PROFILES,
 )
 _profile_cache = list(dict.fromkeys(KNOWN_PROFILES))
@@ -408,7 +412,9 @@ def _discover(data, footer, log, progress, cancel):
                     _cancelled(cancel)
                 hashes += 1
                 if hashes > MAX_DISCOVERY_HASHES:
-                    raise UnsupportedFormat("The unknown profile exceeded the bounded discovery work limit.")
+                    raise UnsupportedFormat(
+                        "Đã chạm giới hạn dò thông số mã hóa; chưa xác định được cách phục hồi file này. "
+                        "Điều này chưa có nghĩa là video bị hỏng.")
                 if hashlib.sha256(prefix + length.to_bytes(4, "big") + suffix).digest() == footer.sha256:
                     with _cache_lock:
                         if (step, length) not in _profile_cache:

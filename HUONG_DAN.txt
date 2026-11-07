@@ -1,6 +1,11 @@
 VIDEOFIX — PHỤC HỒI CAPCUT VÀ QUÉT MP4 TRÙNG NỘI DUNG
 Phiên bản 1.1.0 · Windows 64 bit · Không cần cài đặt
 
+CẬP NHẬT 07/11/2026
+- Phục hồi được clip ngắn có ít dữ liệu dò thông số hơn (gồm file Canh 6 extra_trees 2).
+- Tăng giới hạn dò; clip khó có thể cần chờ lâu hơn. Nút Dừng vẫn dùng được.
+- Nếu chạm giới hạn, phần Chi tiết giải thích rõ; chưa thể kết luận file bị hỏng.
+
 CÁCH DÙNG
 1. Mở VideoFix_CapCut_v1_1.exe.
 2. Kéo thả một hoặc nhiều video / cả thư mục vào cửa sổ.
