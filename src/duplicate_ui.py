@@ -1,7 +1,6 @@
 """Duplicate results window with optional move-to-Recycle-Bin cleanup."""
 from pathlib import Path
 import json
-import os
 import subprocess
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -19,7 +18,7 @@ def readable_size(number):
 
 def show_duplicate_results(parent, report):
     window = tk.Toplevel(parent)
-    window.title('VideoFix 1.1 · MP4 trùng nội dung')
+    window.title('VideoFix 1.2 · MP4 trùng nội dung')
     window.geometry('1100x660')
     window.minsize(800, 500)
     window.configure(bg='#f3f6fb')

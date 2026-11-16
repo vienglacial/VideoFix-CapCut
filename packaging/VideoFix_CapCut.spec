@@ -25,7 +25,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='VideoFix_CapCut_v1_1',
+    name='VideoFix_CapCut',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

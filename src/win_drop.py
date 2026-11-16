@@ -5,12 +5,19 @@ the root. Keep the returned object and call ``close()`` before destroying the
 GUI. Destruction also detaches automatically. ``enabled`` is false when the
 feature cannot be installed; file-picker and command-line input can continue.
 
-Use a normal, unelevated process: Windows can block Explorer drops into an
-elevated application. This helper does not change message-filter permissions.
+The native window procedure never calls into Tk: doing so from inside a
+Windows message callback corrupts tkinter's saved thread state and aborts the
+interpreter as soon as the next Tk callback runs. Dropped paths are parked in
+a plain Python queue and delivered by a Tk timer instead.
+
+Drops from Explorer into an elevated ("Run as administrator") process are
+blocked by Windows unless the drop messages are allowed through, which
+``attach_drop_target`` does for its own windows only.
 """
 
 from __future__ import annotations
 
+from collections import deque
 import ctypes
 from ctypes import wintypes
 from dataclasses import dataclass
@@ -20,6 +27,10 @@ from typing import Callable
 
 WM_DROPFILES = 0x0233
 WM_NCDESTROY = 0x0082
+WM_COPYDATA = 0x004A
+WM_COPYGLOBALDATA = 0x0049
+MSGFLT_ALLOW = 1
+POLL_MS = 50
 GWLP_WNDPROC = -4
 GWL_EXSTYLE = -20
 WS_EX_ACCEPTFILES = 0x00000010
@@ -92,6 +103,17 @@ class _WinApi:
         self.finish_drop.argtypes = [wintypes.HANDLE]
         self.finish_drop.restype = None
 
+    def allow_drop_messages(self, hwnd: int) -> None:
+        """Let a non-elevated Explorer drop files on this window when we are elevated."""
+        try:
+            allow = self.user32.ChangeWindowMessageFilterEx
+            allow.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.DWORD, ctypes.c_void_p]
+            allow.restype = wintypes.BOOL
+            for message in (WM_DROPFILES, WM_COPYDATA, WM_COPYGLOBALDATA):
+                allow(hwnd, message, MSGFLT_ALLOW, None)
+        except (AttributeError, OSError):
+            pass  # optional: an unelevated process receives drops without it
+
     def replace_proc(self, hwnd: int, proc: int) -> int:
         ctypes.set_last_error(0)
         previous = self.set_window_long(hwnd, GWLP_WNDPROC, proc)
@@ -112,7 +134,8 @@ class _DropTarget:
         self._wndproc = None
         self._proc_address = 0
         self._destroy_binding: str | None = None
-        self._pending: set[str] = set()
+        self._inbox: deque[list[str]] = deque()
+        self._poll_token: str | None = None
         self._closed = False
         self._ui_thread = 0
 
@@ -144,8 +167,10 @@ class _DropTarget:
                 previous = self._api.replace_proc(hwnd, self._proc_address)
                 self._hooks[hwnd] = _Hook(hwnd, previous, accepted)
                 self._api.accept_files(hwnd, True)
+                self._api.allow_drop_messages(hwnd)
             self._destroy_binding = root.bind("<Destroy>", self._on_destroy, add="+")
             self.enabled = True
+            self._poll_token = root.after(POLL_MS, self._poll)
         except Exception as exc:
             self.error = str(exc)
             self.close()
@@ -155,32 +180,29 @@ class _DropTarget:
             self.close()
 
     def _queue_paths(self, paths: list[str]) -> None:
-        if not paths or self._closed or not self.enabled:
-            return
-        token: list[str | None] = [None]
+        # Runs inside the native window procedure: plain Python only, no Tk.
+        if paths and not self._closed and self.enabled:
+            self._inbox.append(paths)
 
-        def deliver() -> None:
-            if token[0] is not None:
-                self._pending.discard(token[0])
-            if self._closed or not self.enabled:
-                return
+    def _poll(self) -> None:
+        """Tk timer: hand parked drops to the application on the event loop."""
+        self._poll_token = None
+        if self._closed or not self.enabled:
+            return
+        while self._inbox and not self._closed:
+            paths = self._inbox.popleft()
             try:
                 self._on_paths(paths)
             except BaseException as exc:
-                # Match Tk's normal callback error reporting; never unwind
-                # a Python exception through a native WNDPROC frame.
                 try:
                     self._root.report_callback_exception(type(exc), exc, exc.__traceback__)
                 except Exception:
                     pass
-
-        try:
-            token[0] = self._root.after(0, deliver)
-            self._pending.add(token[0])
-        except Exception:
-            # Closing/destroyed Tk interpreter: the native HDROP has already
-            # been freed; there is nothing left to deliver.
-            pass
+        if not self._closed:
+            try:
+                self._poll_token = self._root.after(POLL_MS, self._poll)
+            except Exception:
+                pass  # Tk is shutting down
 
     def _read_drop(self, handle: int) -> list[str]:
         api = self._api
@@ -239,13 +261,14 @@ class _DropTarget:
         if api is None:
             return
         on_ui_thread = api.current_thread() == self._ui_thread
+        self._inbox.clear()
         if on_ui_thread:
-            for token in tuple(self._pending):
+            if self._poll_token is not None:
                 try:
-                    self._root.after_cancel(token)
+                    self._root.after_cancel(self._poll_token)
                 except Exception:
                     pass
-            self._pending.clear()
+                self._poll_token = None
             if self._destroy_binding is not None:
                 try:
                     self._root.unbind("<Destroy>", self._destroy_binding)

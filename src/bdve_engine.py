@@ -1,8 +1,9 @@
-"""Streaming, non-destructive repair of CapCut BDVE Type 1 MP4 files.
+"""Streaming, non-destructive repair of CapCut BDVE Type 1 videos and pictures.
 
 The trailer, parameter hash and sample-table parsing follow the MIT-licensed
-capcut-cache-recover project, vendored as :mod:`bdve_reference`. Container
-validation here is structural; a full decoder check can be run by the caller.
+capcut-cache-recover project, vendored as :mod:`bdve_reference`. PNG/JPEG
+profile discovery lives in :mod:`bdve_image`. Container validation here is
+structural; a full decoder check can be run by the caller.
 """
 from __future__ import annotations
 
@@ -13,8 +14,10 @@ from pathlib import Path
 import struct
 import tempfile
 import threading
+import time
 from typing import Callable
 
+import bdve_image as images
 import bdve_reference as reference
 
 
@@ -37,6 +40,8 @@ MAX_DISCOVERY_STEP = 5_000_000
 MAX_DISCOVERY_HASHES = 64_000_000
 MAX_MOOV_SIZE = 64 * 1024 * 1024
 CHUNK_SIZE = 4 * 1024 * 1024
+PART_PREFIX, PART_SUFFIX = ".capcut-repair-", ".bdve-part"
+STALE_PART_SECONDS = 600
 KNOWN_PROFILES = (
     (600_056, 533_594), (463_682, 214_523),
     (766_265, 114_840), (331_491, 174_662),
@@ -445,6 +450,46 @@ def _stream_recover(data, end, params, output, progress, cancel):
     _cancelled(cancel)
 
 
+def inspect_image(path: Path, name: str, strict: bool = False):
+    """Read-only PNG/JPEG validation; see :func:`bdve_image.inspect`."""
+    with Path(path).open("rb") as handle:
+        size = os.fstat(handle.fileno()).st_size
+        if size == 0:
+            raise UnsupportedFormat("The input file is empty.")
+        with mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as data:
+            return images.inspect(data, size, name, strict)
+
+
+def _make_parents(directory):
+    """Create ``directory``; return the folders that had to be made, deepest first."""
+    missing, current = [], directory
+    while not current.exists() and current.parent != current:
+        missing.append(current)
+        current = current.parent
+    directory.mkdir(parents=True, exist_ok=True)
+    return missing
+
+
+def _remove_stale_parts(directory):
+    """Delete this tool's own temporaries left by a run that was killed mid-write.
+
+    A temporary still being written is locked by Windows and was modified
+    recently, so both a live repair in another window and a fresh one survive.
+    """
+    limit = time.time() - STALE_PART_SECONDS
+    try:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if (entry.name.startswith(PART_PREFIX) and entry.name.endswith(PART_SUFFIX)
+                        and entry.is_file(follow_symlinks=False) and entry.stat().st_mtime < limit):
+                    try:
+                        os.unlink(entry.path)
+                    except OSError:
+                        pass
+    except OSError:
+        pass
+
+
 def _publish_no_overwrite(temporary, destination):
     # Windows rename never replaces an existing destination. On POSIX, linking
     # exclusively into the same directory supplies the same no-overwrite rule.
@@ -492,11 +537,17 @@ def repair_file(source: Path, destination: Path,
                 verify: Callable[[Path], dict] | None = None) -> dict:
     """Restore one file without changing its source or replacing a destination.
 
-    Returns ``repaired``, ``skipped_healthy`` (structural MP4 validation), or
-    ``unsupported``. I/O errors, collisions and failed output validation raise;
-    cancellation raises :class:`CancelledError`. ``progress`` receives one float
-    in [0, 1]. Optional ``verify(temporary_path)`` runs before publication and
-    may return decoder-check metadata; any exception discards the temporary.
+    Returns ``repaired``, ``skipped_healthy`` (structural validation),
+    ``skipped_existing`` or ``unsupported``; ``media`` is ``video`` or
+    ``image``. I/O errors, collisions and failed output validation raise;
+    cancellation raises :class:`CancelledError`. ``progress`` receives one
+    float in [0, 1]. Optional ``verify(temporary_path)`` runs before
+    publication and may return decoder-check metadata; any exception discards
+    the temporary.
+
+    A picture is always written with its real extension, so the returned
+    ``destination`` can differ from the requested one. Nothing is left behind
+    on failure: neither the temporary nor an output folder made for it.
     """
     source, destination = Path(source), Path(destination)
     logger, report = log or (lambda message: None), progress or (lambda value: None)
@@ -509,7 +560,7 @@ def repair_file(source: Path, destination: Path,
         raise FileNotFoundError(f"Input file not found: {source}")
     common = {"source": str(source), "destination": str(destination)}
     report(0.0)
-    temporary = None
+    temporary, created, published = None, [], False
     try:
         with source.open("rb") as input_file:
             initial = os.fstat(input_file.fileno())
@@ -518,9 +569,11 @@ def repair_file(source: Path, destination: Path,
             with mmap.mmap(input_file.fileno(), 0, access=mmap.ACCESS_READ) as data:
                 _cancelled(cancel)
                 footer = _footer(data)
+                picture = images.detect(data, footer.start if footer else len(data), footer is not None)
+                common["media"] = "image" if picture else "video"
                 if footer is None:
                     try:
-                        info = _inspect_data(data)
+                        info = images.inspect(data, len(data), picture[0]) if picture else _inspect_data(data)
                     except (RepairError, ValueError, IndexError, struct.error) as exc:
                         return {**common, "status": "unsupported", "reason": str(exc)}
                     report(1.0)
@@ -528,16 +581,30 @@ def repair_file(source: Path, destination: Path,
                 if footer.cryptor_type != 1:
                     return {**common, "status": "unsupported",
                             "reason": f"Unsupported BDVE cryptor type: {footer.cryptor_type}"}
+                if picture and destination.suffix.casefold() not in images.SUFFIXES[picture[0]]:
+                    destination = destination.with_suffix(images.SUFFIXES[picture[0]][0])
+                    common["destination"] = str(destination)
+                    if destination.exists():
+                        return {**common, "status": "skipped_existing",
+                                "reason": "Đã có bản sửa; giữ nguyên file đã có."}
                 logger(f"BDVE Type 1, version {footer.version}; original file remains unchanged.")
                 report(0.03)
+                proof = "parameter_hash"
                 try:
-                    params = _discover(data, footer, logger, report, cancel)
-                except UnsupportedFormat as exc:
+                    if picture:
+                        params, proof = images.discover(data, footer.start, footer.sha256, picture,
+                                                        logger, lambda: _cancelled(cancel))
+                    else:
+                        params = _discover(data, footer, logger, report, cancel)
+                except (UnsupportedFormat, images.ImageError) as exc:
                     return {**common, "status": "unsupported", "reason": str(exc)}
-                logger(f"Verified profile: step={params.step}, length={params.length}, key=0x{params.key:02X}.")
+                logger(f"Verified profile ({proof}): step={params.step}, length={params.length}, "
+                       f"key=0x{params.key:02X}.")
                 _cancelled(cancel)
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                descriptor, name = tempfile.mkstemp(prefix=".capcut-repair-", suffix=".bdve-part",
+                created = _make_parents(destination.parent)
+                if not created:
+                    _remove_stale_parts(destination.parent)
+                descriptor, name = tempfile.mkstemp(prefix=PART_PREFIX, suffix=PART_SUFFIX,
                                                    dir=destination.parent)
                 temporary = Path(name)
                 with os.fdopen(descriptor, "wb") as output:
@@ -549,23 +616,27 @@ def repair_file(source: Path, destination: Path,
                 if (final.st_size, final.st_mtime_ns) != (initial.st_size, initial.st_mtime_ns):
                     raise RepairError("The source changed during repair; the output was discarded.")
         _cancelled(cancel)
-        logger("Checking recovered MP4 boxes and video metadata.")
+        logger("Checking the recovered file structure and metadata.")
         report(0.93)
         try:
-            info = inspect_mp4(temporary)
+            if picture:
+                info = inspect_image(temporary, picture[0], strict=proof != "parameter_hash")
+            else:
+                info = inspect_mp4(temporary)
         except (RepairError, ValueError, IndexError, struct.error) as exc:
-            raise RepairError(f"Recovered MP4 validation failed: {exc}") from exc
+            raise RepairError(f"Recovered file validation failed: {exc}") from exc
         _cancelled(cancel)
         verification = verify(temporary) if verify is not None else None
         _cancelled(cancel)
         report(0.99)
         _cancelled(cancel)
         _publish_no_overwrite(temporary, destination)
-        temporary = None
+        temporary, published = None, True
         result = {**common, "status": "repaired", "size": footer.start,
                   "profile": {"step": params.step, "length": params.length, "key": params.key},
-                  "removed_footer_bytes": footer.size, "video_info": info,
-                  "verification": verification}
+                  "proof": proof, "removed_footer_bytes": footer.size, "video_info": info,
+                  "verification": verification,
+                  "source_bytes": initial.st_size, "source_mtime_ns": initial.st_mtime_ns}
         logger(f"Recovered: {destination}")
         report(1.0)
         return result
@@ -575,3 +646,9 @@ def repair_file(source: Path, destination: Path,
                 temporary.unlink(missing_ok=True)
             except OSError:
                 pass
+        if not published:
+            for folder in created:     # leave no empty output folder behind
+                try:
+                    folder.rmdir()
+                except OSError:
+                    break

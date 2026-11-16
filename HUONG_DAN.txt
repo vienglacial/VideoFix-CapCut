@@ -1,20 +1,52 @@
-VIDEOFIX — PHỤC HỒI CAPCUT VÀ QUÉT MP4 TRÙNG NỘI DUNG
-Phiên bản 1.1.0 · Windows 64 bit · Không cần cài đặt
+VIDEOFIX — PHỤC HỒI VIDEO VÀ HÌNH CAPCUT, QUÉT MP4 TRÙNG NỘI DUNG
+Phiên bản 1.2.0 · Windows 64 bit · Không cần cài đặt
 
-CẬP NHẬT 07/11/2026
+CẬP NHẬT 16/11/2026 (bản 1.2.0)
+- Sửa lỗi nặng: thả file vào cửa sổ làm công cụ tự tắt. Kéo thả giờ chạy ổn định.
+- Thả vào là tự chạy, không cần bấm Bắt đầu. Thả thêm lúc đang chạy vẫn được nhận và xử lý ngay sau đợt hiện tại.
+- Phục hồi được cả HÌNH: PNG và JPG bị CapCut khóa (xem mục HÌNH ẢNH).
+- Tùy chọn mới: Xóa file gốc khi phục hồi xong (vào Thùng rác).
+- Ít file rác hơn: không còn tự tạo nhật ký ket_qua_*.json, không để lại thư mục kết quả rỗng hay file tạm khi lỗi hoặc dừng.
+- File chạy đổi tên thành VideoFix_CapCut.exe.
+
+CẬP NHẬT 07/11/2026 (bản 1.1.0)
 - Phục hồi được clip ngắn có ít dữ liệu dò thông số hơn (gồm file Canh 6 extra_trees 2).
 - Tăng giới hạn dò; clip khó có thể cần chờ lâu hơn. Nút Dừng vẫn dùng được.
 - Nếu chạm giới hạn, phần Chi tiết giải thích rõ; chưa thể kết luận file bị hỏng.
 
 CÁCH DÙNG
-1. Mở VideoFix_CapCut_v1_1.exe.
-2. Kéo thả một hoặc nhiều video / cả thư mục vào cửa sổ.
-   Bạn cũng có thể kéo trực tiếp lên biểu tượng EXE, hoặc dùng Chọn video / Chọn thư mục.
-3. Bấm Bắt đầu phục hồi.
-4. Bấm Mở thư mục kết quả khi hoàn tất.
+1. Mở VideoFix_CapCut.exe (hoặc "VideoFix CapCut" trong Start nếu máy đã có lối tắt).
+2. Kéo thả một hoặc nhiều video / hình / cả thư mục vào cửa sổ. Công cụ tự nhận và chạy luôn.
+   Cũng có thể kéo thẳng lên biểu tượng EXE, hoặc dùng Chọn file / Chọn thư mục.
+3. Theo dõi cột Trạng thái. Khi xong, bấm Mở thư mục kết quả.
+- Muốn tự bấm Bắt đầu phục hồi: bỏ tick "Tự chạy ngay khi thả / chọn file".
+  Nên bỏ tick khi chỉ định Quét trùng MP4, để công cụ không tự phục hồi trước.
+- Thả một đợt mới sau khi đợt trước đã xong: danh sách được thay bằng đợt mới, không làm lại đợt cũ.
+
+CÁC Ô TÙY CHỌN
+- Quét cả thư mục con.
+- Kiểm tra phát hình và tiếng: giải mã thử toàn bộ bản sửa (và cả file vốn đã chuẩn) bằng FFmpeg của CapCut hoặc của máy.
+- Tạo thêm bản H264 (chỉ cho video): mặc định TẮT. Khi tick, video HEVC đã phục hồi có thêm bản nén lại H264
+  trong thư mục H264_compatible (ưu tiên card đồ họa). Video vốn là H264 thì không tạo thêm.
+- Tự chạy ngay khi thả / chọn file: mặc định BẬT.
+- Xóa file gốc khi phục hồi xong: mặc định TẮT và phải tick lại mỗi lần mở công cụ.
+  · Chỉ xóa file gốc của những file VỪA được phục hồi trong lần chạy đó, sau khi bản sửa đã qua giải mã thử toàn bộ.
+  · File gốc được chuyển vào Thùng rác, khôi phục lại được.
+  · Không bao giờ xóa: file vốn đã chuẩn, file lỗi / chưa hỗ trợ, file báo "Đã có bản sửa".
+  · Máy không có FFmpeg / CapCut để giải mã thử thì không xóa. File gốc bị thay đổi trong lúc chạy cũng không xóa.
+  · Dòng nào không xóa được sẽ ghi "còn giữ file gốc"; bấm Chi tiết để xem lý do.
+- Lưu nhật ký JSON: mặc định TẮT. Khi tick mới tạo file ket_qua_*.json trong thư mục kết quả.
+
+HÌNH ẢNH (PNG, JPG)
+- PNG: mọi khối dữ liệu đều được đối chiếu mã kiểm tra (CRC) nên kết quả đúng từng byte so với ảnh gốc.
+- JPG: chỉ phục hồi khi file đủ lớn để đối chiếu được mã băm trong file (thường từ khoảng 1 MB trở lên).
+  JPG nhỏ hơn sẽ báo "Chưa hỗ trợ" thay vì đoán, vì đoán sai có thể tạo ra ảnh hỏng mà không ai phát hiện.
+- Ảnh PNG lưu thành một khối dữ liệu duy nhất rất lớn (hiếm gặp) cũng có thể báo "Chưa hỗ trợ".
+- Bản sửa giữ đúng loại file: ten.png_FIXED.png, ten.jpg_FIXED.jpg.
+- Các định dạng hình khác (WebP, GIF, HEIC…) chưa hỗ trợ.
 
 QUÉT VIDEO MP4 TRÙNG DÙ KHÁC TÊN
-1. Chọn hoặc kéo thả các video / thư mục cần so sánh như trên.
+1. Bỏ tick "Tự chạy ngay khi thả / chọn file", rồi chọn hoặc kéo thả các video / thư mục cần so sánh.
 2. Bấm Quét trùng MP4.
 3. Xem các nhóm trong bảng kết quả: mỗi nhóm có một bản Giữ lại, các bản trùng được đánh dấu ☑ Xóa.
 4. Muốn giữ bản khác: chọn file đó rồi bấm Chọn làm bản giữ.
@@ -31,30 +63,32 @@ QUÉT VIDEO MP4 TRÙNG DÙ KHÁC TÊN
 
 NẾU MỘT FILE BÁO LỖI
 Chọn dòng rồi bấm Chi tiết hoặc nhấp đúp để xem lý do cụ thể.
-Bản 1.1 đã mở rộng nhận dạng cho hai file keole 1.mp4 và nam dau 2.mp4.
+"Chưa hỗ trợ" nghĩa là công cụ chưa xác định chắc chắn được cách phục hồi; chưa có nghĩa là file bị hỏng.
 
 KẾT QUẢ LƯU Ở ĐÂU?
 - Thả một thư mục: kết quả ở _PHUC_HOI_CAPCUT bên trong thư mục đó.
 - Thả các file: kết quả ở _PHUC_HOI_CAPCUT cạnh các file gốc.
-- Giữ cấu trúc thư mục con. Tên bản sửa kết thúc bằng _FIXED.mp4.
-- File đã chuẩn được bỏ qua. Bản sửa đã tồn tại cũng được giữ nguyên.
-- Có nhật ký ket_qua_*.json để xem các file lỗi hoặc chưa hỗ trợ.
+- Giữ cấu trúc thư mục con. Tên bản sửa kết thúc bằng _FIXED.mp4 (video) hoặc _FIXED.png / _FIXED.jpg (hình).
+- File đã chuẩn được bỏ qua và không tạo ra gì. Bản sửa đã tồn tại cũng được giữ nguyên.
+- Ngoài bản sửa, công cụ không tạo thêm file nào, trừ khi bạn tick Tạo thêm bản H264 hoặc Lưu nhật ký JSON.
 
 CÔNG CỤ LÀM GÌ?
-- Phục hồi lớp dữ liệu BDVE Type 1 trong video CapCut, gồm dạng đã kiểm tra trên bộ Cảnh 2.
+- Phục hồi lớp dữ liệu BDVE Type 1 trong video và hình CapCut.
 - Không nén lại hình hoặc tiếng; giữ độ phân giải, FPS và codec gốc.
-- Ô "Tạo thêm bản H264" mặc định TẮT: khi tắt, chỉ xuất bản _FIXED.mp4, không tạo file nào khác.
-  Khi tick, video HEVC đã phục hồi có thêm bản nén lại H264 trong thư mục H264_compatible
-  (dùng FFmpeg của CapCut, ưu tiên card đồ họa). Video vốn là H264 thì không tạo thêm.
-- Không ghi đè video gốc. Có nút Dừng; file đang làm dở không xuất thành MP4 hoàn tất.
-- Chạy cục bộ, không tải video lên mạng, không cần Python hoặc codec riêng cho bước phục hồi.
+- Không ghi đè file gốc. Có nút Dừng; file đang làm dở không xuất thành file hoàn tất.
+- Chạy cục bộ, không tải gì lên mạng, không cần Python hoặc codec riêng cho bước phục hồi.
 - Nếu có FFmpeg/CapCut trên máy, tự dùng công cụ giải mã sẵn có để kiểm tra toàn bộ hình và tiếng.
-  Nếu không tìm thấy, giao diện sẽ thông báo chỉ kiểm tra cấu trúc MP4.
+  Nếu không tìm thấy, giao diện sẽ thông báo chỉ kiểm tra cấu trúc file.
 
 GIỚI HẠN
 - Bản HEVC sau phục hồi vẫn cần trình phát hỗ trợ HEVC, ví dụ MPC-HC bản cập nhật.
-- Không sửa được mọi loại video hỏng. Dữ liệu tải thiếu hoặc dạng CapCut mới chưa hỗ trợ sẽ báo lỗi/bỏ qua.
-- Nên đợi tải xong video rồi mới phục hồi; không chọn file đang được CapCut ghi.
+- Không sửa được mọi loại file hỏng. Dữ liệu tải thiếu hoặc dạng CapCut mới chưa hỗ trợ sẽ báo lỗi/bỏ qua.
+- Nên đợi tải xong rồi mới phục hồi; không chọn file đang được CapCut ghi.
+- Nên chạy công cụ bình thường, không cần "Run as administrator".
+
+DÒNG LỆNH (không bắt buộc)
+VideoFix_CapCut.exe --headless <file hoặc thư mục> [--delete-source] [--report] [--h264] [--no-verify]
+Thêm --delete-source hoặc --no-auto vào lối tắt nếu muốn mặc định bật xóa file gốc / tắt tự chạy.
 
 MÃ NGUỒN & GIẤY PHÉP
 Mã nguồn đi kèm trong thư mục source. Phần phân tích BDVE kế thừa dự án MIT

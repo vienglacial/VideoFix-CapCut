@@ -55,7 +55,9 @@ def recycle(path: Path, hwnd: int | None = None) -> None:
     if operation.fAnyOperationsAborted:
         raise OSError("Đã hủy xóa.")
     if code:
-        raise OSError(f"Windows không xóa được file (mã 0x{code:X}).")
+        hint = (" Đường dẫn quá dài hoặc chứa tên đặc biệt của Windows (con, aux, nul…)."
+                if code in (0x79, 0x7C, 0x81, 0x402) else "")
+        raise OSError(f"Windows không xóa được file (mã 0x{code:X}).{hint}")
     if os.path.lexists(path):
         raise OSError("File vẫn còn sau khi xóa.")
 

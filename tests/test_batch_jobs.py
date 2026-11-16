@@ -236,7 +236,7 @@ class OrchestrationTests(unittest.TestCase):
         (input_root / 'unsupported.tmp').write_bytes(b'not a supported media file')
         output = self.root / 'output'
         args = SimpleNamespace(paths=[str(input_root)], no_recursive=False,
-                               output_dir=str(output), no_verify=True)
+                               output_dir=str(output), no_verify=True, report=True)
         capture = io.StringIO()
         with redirect_stdout(capture):
             exit_code = video_fix.headless(args)

@@ -6,6 +6,8 @@ import hashlib
 
 OUTPUT_NAME = '_PHUC_HOI_CAPCUT'
 VIDEO_SUFFIXES = {'.mp4', '.mov', '.m4v', '.mkv', '.tmp'}
+IMAGE_SUFFIXES = {'.png', '.jpg', '.jpeg'}
+MEDIA_SUFFIXES = VIDEO_SUFFIXES | IMAGE_SUFFIXES
 EXCLUDED_NAMES = {OUTPUT_NAME.casefold(), '_fixed', 'h264_compatible', '__pycache__'}
 
 
@@ -37,11 +39,13 @@ def collect_jobs(paths, recursive=True, output_dir=None, cancel=None):
             root_key = hashlib.sha256(os.path.normcase(str(root)).encode('utf-8')).hexdigest()[:12]
             output_root = output_root / (root.name + '-' + root_key)
         relative = source.relative_to(root)
-        destination = output_root / relative.parent / (source.name + '_FIXED.mp4')
+        # A picture keeps its own extension; every video is restored as MP4.
+        ending = source.suffix.casefold() if source.suffix.casefold() in IMAGE_SUFFIXES else '.mp4'
+        destination = output_root / relative.parent / (source.name + '_FIXED' + ending)
         target_key = os.path.normcase(str(destination))
         suffix = 2
         while target_key in destinations:
-            destination = destination.with_name(source.name + f'_FIXED_{suffix}.mp4')
+            destination = destination.with_name(source.name + f'_FIXED_{suffix}' + ending)
             target_key = os.path.normcase(str(destination))
             suffix += 1
         destinations.add(target_key)
@@ -67,7 +71,7 @@ def collect_jobs(paths, recursive=True, output_dir=None, cancel=None):
                 ) if recursive else []
                 for name in sorted(filenames, key=str.casefold):
                     source = base / name
-                    if source.suffix.casefold() in VIDEO_SUFFIXES and not source.is_symlink():
+                    if source.suffix.casefold() in MEDIA_SUFFIXES and not source.is_symlink():
                         add(source, item)
         else:
             problems.append(f'Không tìm thấy: {item}')
