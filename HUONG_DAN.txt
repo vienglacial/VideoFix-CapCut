@@ -1,5 +1,9 @@
 VIDEOFIX — PHỤC HỒI VIDEO VÀ HÌNH CAPCUT, QUÉT MP4 TRÙNG NỘI DUNG
-Phiên bản 1.2.0 · Windows 64 bit · Không cần cài đặt
+Phiên bản 1.2.1 · Windows 64 bit · Không cần cài đặt
+
+CẬP NHẬT 23/11/2026 (bản 1.2.1)
+- Phục hồi được hình PNG có đoạn khóa rất ngắn (ngắn hơn một khối dữ liệu của ảnh) - trước đây báo "Chưa hỗ trợ".
+- Phục hồi được hình có điểm chuyển nằm trong một khối dữ liệu rất lớn (ví dụ khối thông tin C2PA của ảnh AI).
 
 CẬP NHẬT 16/11/2026 (bản 1.2.0)
 - Sửa lỗi nặng: thả file vào cửa sổ làm công cụ tự tắt. Kéo thả giờ chạy ổn định.
@@ -41,7 +45,8 @@ HÌNH ẢNH (PNG, JPG)
 - PNG: mọi khối dữ liệu đều được đối chiếu mã kiểm tra (CRC) nên kết quả đúng từng byte so với ảnh gốc.
 - JPG: chỉ phục hồi khi file đủ lớn để đối chiếu được mã băm trong file (thường từ khoảng 1 MB trở lên).
   JPG nhỏ hơn sẽ báo "Chưa hỗ trợ" thay vì đoán, vì đoán sai có thể tạo ra ảnh hỏng mà không ai phát hiện.
-- Ảnh PNG lưu thành một khối dữ liệu duy nhất rất lớn (hiếm gặp) cũng có thể báo "Chưa hỗ trợ".
+- Ảnh PNG lưu thành một khối dữ liệu duy nhất rất lớn (hiếm gặp) vẫn có thể báo "Chưa hỗ trợ"
+  nếu khối đó chứa từ hai điểm chuyển trở lên.
 - Bản sửa giữ đúng loại file: ten.png_FIXED.png, ten.jpg_FIXED.jpg.
 - Các định dạng hình khác (WebP, GIF, HEIC…) chưa hỗ trợ.
 

@@ -82,6 +82,31 @@ class PictureRecoveryTests(Workspace):
                 self.assertEqual(result['profile'], {'step': step, 'length': length, 'key': key})
                 self.assertEqual(Path(result['destination']).read_bytes(), self.PLAIN)
 
+    def test_scrambled_stretch_shorter_than_a_chunk(self):
+        # Real CapCut profile seen on 2026-11-23: 1,947 scrambled bytes per 426,738-byte
+        # period, so each stretch sits inside one 8 KB chunk (two boundaries in one chunk).
+        n = len(self.PLAIN)
+        for step, length, key in ((n // 6 + 11, 1947, 0x7A), (n // 9, 300, 0x3C), (n // 4 + 5, 5000, 0xE1)):
+            with self.subTest(step=step, length=length):
+                result = self.repair(wrap(self.PLAIN, step, length, key), name=f's{step}.png')
+                self.assertEqual((result['status'], result['proof']), ('repaired', 'parameter_hash'))
+                self.assertEqual(result['profile'], {'step': step, 'length': length, 'key': key})
+                self.assertEqual(Path(result['destination']).read_bytes(), self.PLAIN)
+
+    def test_plain_gap_shorter_than_a_chunk(self):
+        n = len(self.PLAIN)
+        step = n // 5 + 3
+        result = self.repair(wrap(self.PLAIN, step, step - 900, 0x55))
+        self.assertEqual((result['status'], result['proof']), ('repaired', 'parameter_hash'))
+        self.assertEqual(Path(result['destination']).read_bytes(), self.PLAIN)
+
+    def test_single_boundary_inside_one_huge_chunk(self):
+        plain = png(chunk=1 << 30)          # the whole picture in one IDAT chunk
+        self.assertGreater(len(plain), 300_000)
+        result = self.repair(wrap(plain, len(plain) + 777, len(plain) // 3, 0x21))
+        self.assertEqual((result['status'], result['proof']), ('repaired', 'structure'))
+        self.assertEqual(Path(result['destination']).read_bytes(), plain)
+
     def test_png_inside_one_period_is_proven_by_every_crc(self):
         n = len(self.PLAIN)
         for step, length in ((n + 5000, n + 100), (n + 5000, n // 2)):

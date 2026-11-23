@@ -16,7 +16,7 @@ from playback_check import find_ffmpeg, verify_playback
 from duplicates import scan_duplicates
 from h264_export import make_h264_copy
 
-VERSION = '1.2.0'
+VERSION = '1.2.1'
 
 
 def save_reports(records, roots, issues):

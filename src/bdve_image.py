@@ -31,8 +31,10 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 JPEG_SIGNATURE = b"\xff\xd8\xff"
 SUFFIXES = {"png": (".png",), "jpeg": (".jpg", ".jpeg")}
 
-MAX_SPLIT_CHUNK = 1 << 18     # largest PNG chunk searched for an exact boundary
-EXACT_SPLITS = 12             # exact boundaries wanted before skipping the search
+MAX_SPLIT_CHUNK = 1 << 18     # largest PNG chunk whose boundary search uses the lookup table
+MAX_SCAN_CHUNK = 1 << 23      # larger ones (C2PA metadata, single-IDAT pictures) are walked instead
+MAX_PAIR_CHUNK = 1 << 17      # largest chunk searched for a scrambled stretch lying wholly inside it
+EXACT_SPLITS = 16             # exact boundaries wanted before skipping the search
 MIN_RUN = 24                  # consecutive agreeing JPEG clues that count as proof
 JPEG_TRIMS = (0, 3)           # clues dropped from each end of a run: exact first, then cautious
 MAX_MULTIPLE = 4096
@@ -75,28 +77,61 @@ class _TailFlips:
     def __init__(self, key):
         self._key = bytes([key])
         self._flipped = self._plain = self._count = 0
-        self._first, self._more = {0: 0}, {}
+        self._first, self._more, self._values = {0: 0}, {}, [0]
 
-    def lengths(self, delta, limit):
+    def _extend(self, limit):
         while self._count < limit:
             self._flipped = zlib.crc32(self._key, self._flipped)
             self._plain = zlib.crc32(b"\0", self._plain)
             self._count += 1
             value = self._flipped ^ self._plain
+            self._values.append(value)
             if value in self._first:
                 self._more.setdefault(value, []).append(self._count)
             else:
                 self._first[value] = self._count
+
+    def lengths(self, delta, limit):
+        if limit > MAX_SPLIT_CHUNK:
+            return self._scan(delta, limit)
+        self._extend(limit)
         found = [self._first[delta]] if delta in self._first else []
         return [m for m in found + self._more.get(delta, []) if m <= limit]
+
+    def pairs(self, delta, limit):
+        """All ``(m1, m2)``, ``m1 > m2``, where flipping bytes ``m1..m2`` from the end gives ``delta``.
+
+        That is a stretch in the other state lying wholly inside the buffer:
+        flip the last ``m1`` bytes, then flip the last ``m2`` back.
+        """
+        self._extend(limit)
+        values, first, more, found = self._values, self._first, self._more, []
+        for m2 in range(limit):
+            wanted = delta ^ values[m2]
+            if wanted in first:
+                found += [(m1, m2) for m1 in [first[wanted]] + more.get(wanted, []) if m2 < m1 <= limit]
+        return found
+
+    def _scan(self, delta, limit):
+        """Same answer for a large chunk, walking the values instead of storing them."""
+        flipped = plain = 0
+        found = [0] if delta == 0 else []
+        key, crc32 = self._key, zlib.crc32
+        for count in range(1, limit + 1):
+            flipped, plain = crc32(key, flipped), crc32(b"\0", plain)
+            if flipped ^ plain == delta:
+                found.append(count)
+        return found
 
 
 def _png_chunk(view, flips, key, position, end, state, split):
     """Validate the chunk at ``position`` assuming it starts in ``state``.
 
-    Returns ``(stop, kind, low, high)`` or None. ``low``/``high`` are None for
-    a chunk lying in one state; otherwise the state changes inside it, at an
-    offset in ``(low, high]`` (one offset unless CRC-32 cannot separate them).
+    Returns ``(stop, kind, edges)`` or None. ``edges`` is empty for a chunk
+    lying in one state. Otherwise each ``(low, high)`` says the state flips
+    at an offset in ``(low, high]`` (one offset unless CRC-32 cannot separate
+    candidates): one edge for a boundary inside the chunk, two for a short
+    stretch of the other state lying wholly inside its data.
     """
     if position + 12 > end:
         return None
@@ -106,8 +141,8 @@ def _png_chunk(view, flips, key, position, end, state, split):
         body = view(position + 4, stop, state)
         computed, stored = zlib.crc32(body[:-4]), int.from_bytes(body[-4:], "big")
         if computed == stored:
-            return (stop, body[:4], None, None) if _chunk_type(body[:4]) else None
-        if split and length + 4 <= MAX_SPLIT_CHUNK:
+            return (stop, body[:4], ()) if _chunk_type(body[:4]) else None
+        if split and length + 4 <= MAX_SCAN_CHUNK:
             spread = key * 0x01010101
             points = [stop - 4 - m for m in flips.lengths(computed ^ stored ^ spread, length + 4)]
             points += [stop - 4 + j for j in (1, 2, 3) if computed == stored ^ (spread >> (8 * j))]
@@ -118,7 +153,16 @@ def _png_chunk(view, flips, key, position, end, state, split):
                 if _chunk_type(kind):
                     kinds[point] = kind
             if kinds:
-                return stop, kinds[min(kinds)], min(kinds) - 1, max(kinds)
+                return stop, kinds[min(kinds)], ((min(kinds) - 1, max(kinds)),)
+            if length + 4 <= MAX_PAIR_CHUNK and _chunk_type(body[:4]):
+                # A stretch shorter than the chunk: in at ``first``, out at ``second``,
+                # both after the type field and before the CRC field. Ambiguous
+                # answers are dropped; the trailer hash still has the last word.
+                inside = [(stop - 4 - m1, stop - 4 - m2) for m1, m2 in flips.pairs(computed ^ stored, length + 4)
+                          if stop - 4 - m1 >= position + 8]
+                if len(inside) == 1:
+                    first, second = inside[0]
+                    return stop, body[:4], ((first - 1, first), (second - 1, second))
     if split:
         for j in (1, 2, 3):     # boundary inside the 4-byte length field
             mixed = view(position, position + j, state) + view(position + j, position + 4, not state)
@@ -127,7 +171,7 @@ def _png_chunk(view, flips, key, position, end, state, split):
                 continue
             body = view(position + 4, stop, not state)
             if zlib.crc32(body[:-4]) == int.from_bytes(body[-4:], "big") and _chunk_type(body[:4]):
-                return stop, body[:4], position + j - 1, position + j
+                return stop, body[:4], ((position + j - 1, position + j),)
     return None
 
 
@@ -196,12 +240,12 @@ def _png_scan(data, end, key, checkpoint):
             if position is None:
                 break
             continue
-        stop, kind, low, high = found
+        stop, kind, edges = found
         observations.append((position, began))
         state = began
-        if low is not None:
-            state = not began
-            observations += [(low, began), (high, state)]
+        for low, high in edges:
+            observations += [(low, state), (high, not state)]
+            state = not state
         observations.append((stop - 1, state))
         # An IEND before the end belongs to a picture embedded in metadata.
         position, ended = stop, kind == b"IEND" and stop == end
