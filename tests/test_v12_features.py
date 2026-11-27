@@ -12,6 +12,7 @@ import struct
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import zlib
 from contextlib import redirect_stdout
@@ -146,6 +147,37 @@ class PictureRecoveryTests(Workspace):
         result = bdve_engine.repair_file(source, self.root / 'out' / 'small.jpg_FIXED.jpg')
         self.assertEqual(result['status'], 'unsupported')
         self.assertEqual(self.files(), ['small.jpg'])
+
+
+class LongPeriodSearchTests(unittest.TestCase):
+    """Pictures that fit inside one period: the step lies far past the end of the file."""
+    # Real pictures of 2026-11-28 (about 0.5 MB each): periods 921,852 and 978,424.
+    OBSERVATIONS = [(0, True), (256_228, True), (257_024, False), (508_089, False)]
+
+    @staticmethod
+    def solve(step, length, key, lengths, checkpoint=lambda: None):
+        target = hashlib.sha256(step.to_bytes(4, 'big') + length.to_bytes(4, 'big') + bytes([key])).digest()
+        with unittest.mock.patch.object(bdve_image, 'PARALLEL_HASHES', 0):   # always use the worker processes
+            return bdve_image._solve_single(LongPeriodSearchTests.OBSERVATIONS, key, target, checkpoint,
+                                            [10 ** 9], lengths)
+
+    def test_period_past_the_file_is_found_on_all_cores(self):
+        for step, length in ((921_852, 256_816), (bdve_image.LIKELY_STEP + 4321, 256_500)):
+            with self.subTest(step=step):
+                params = self.solve(step, length, 0x41, range(length - 9, length + 9))
+                self.assertEqual((params.step, params.length, params.key), (step, length, 0x41))
+
+    def test_search_stops_when_cancelled(self):
+        calls = []
+
+        def checkpoint():       # about 250 calls cover the steps below the last observation
+            calls.append(1)
+            if len(calls) > 300:
+                raise bdve_engine.CancelledError()
+        started = time.monotonic()
+        with self.assertRaises(bdve_engine.CancelledError):
+            self.solve(bdve_image.MAX_STEP + 5, 256_816, 0x41, range(256_300, 256_900), checkpoint)
+        self.assertLess(time.monotonic() - started, 60)
 
 
 class JunkAndCleanupTests(Workspace):

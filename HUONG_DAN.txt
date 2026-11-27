@@ -1,5 +1,14 @@
 VIDEOFIX — PHỤC HỒI VIDEO VÀ HÌNH CAPCUT, QUÉT MP4 TRÙNG NỘI DUNG
-Phiên bản 1.2.1 · Windows 64 bit · Không cần cài đặt
+Phiên bản 1.2.3 · Windows 64 bit · Không cần cài đặt
+
+CẬP NHẬT 28/11/2026 (bản 1.2.3)
+- Phục hồi được JPG có chu kỳ khóa rất dài (gần 1 triệu byte) - trước đây báo "nằm gọn trong một chu kỳ mã hóa".
+  Công cụ dùng tất cả nhân CPU để dò; mỗi hình như vậy mất khoảng 30 giây đến 1-2 phút, thanh tiến độ vẫn chạy.
+
+CẬP NHẬT 27/11/2026 (bản 1.2.2)
+- Phục hồi được hình có chu kỳ khóa rất ngắn (khoảng 1 KB) - trước đây báo "Chưa xác định được thông số".
+- Phục hồi được hình có chu kỳ khóa dài hơn cả file (thường gặp ở JPG). Với JPG, công cụ tự giải mã thử phần hình
+  để tìm đúng chỗ chuyển; mỗi hình như vậy mất thêm khoảng 1-10 giây.
 
 CẬP NHẬT 23/11/2026 (bản 1.2.1)
 - Phục hồi được hình PNG có đoạn khóa rất ngắn (ngắn hơn một khối dữ liệu của ảnh) - trước đây báo "Chưa hỗ trợ".
@@ -43,8 +52,8 @@ CÁC Ô TÙY CHỌN
 
 HÌNH ẢNH (PNG, JPG)
 - PNG: mọi khối dữ liệu đều được đối chiếu mã kiểm tra (CRC) nên kết quả đúng từng byte so với ảnh gốc.
-- JPG: chỉ phục hồi khi file đủ lớn để đối chiếu được mã băm trong file (thường từ khoảng 1 MB trở lên).
-  JPG nhỏ hơn sẽ báo "Chưa hỗ trợ" thay vì đoán, vì đoán sai có thể tạo ra ảnh hỏng mà không ai phát hiện.
+- JPG: chỉ nhận kết quả khi khớp được mã băm trong file. Phần lớn JPG, kể cả JPG nhỏ, đều khớp được.
+  Riêng JPG rất nhỏ (vài KB) có thể báo "Chưa hỗ trợ" thay vì đoán, vì đoán sai có thể tạo ra ảnh hỏng mà không ai phát hiện.
 - Ảnh PNG lưu thành một khối dữ liệu duy nhất rất lớn (hiếm gặp) vẫn có thể báo "Chưa hỗ trợ"
   nếu khối đó chứa từ hai điểm chuyển trở lên.
 - Bản sửa giữ đúng loại file: ten.png_FIXED.png, ten.jpg_FIXED.jpg.

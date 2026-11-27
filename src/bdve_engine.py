@@ -593,7 +593,8 @@ def repair_file(source: Path, destination: Path,
                 try:
                     if picture:
                         params, proof = images.discover(data, footer.start, footer.sha256, picture,
-                                                        logger, lambda: _cancelled(cancel))
+                                                        logger, lambda: _cancelled(cancel),
+                                                        lambda fraction: report(0.03 + 0.3 * fraction))
                     else:
                         params = _discover(data, footer, logger, report, cancel)
                 except (UnsupportedFormat, images.ImageError) as exc:

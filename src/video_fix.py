@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 import datetime
 import json
+import multiprocessing
 import os
 import queue
 import sys
@@ -16,7 +17,7 @@ from playback_check import find_ffmpeg, verify_playback
 from duplicates import scan_duplicates
 from h264_export import make_h264_copy
 
-VERSION = '1.2.1'
+VERSION = '1.2.3'
 
 
 def save_reports(records, roots, issues):
@@ -649,6 +650,7 @@ def main():
 
 
 if __name__ == '__main__':
+    multiprocessing.freeze_support()    # the packaged exe also runs the picture-search workers
     try:
         raise SystemExit(main())
     except Exception:
